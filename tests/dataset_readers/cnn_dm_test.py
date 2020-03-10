@@ -20,16 +20,24 @@ class TestCnnDailymailReader:
         assert set(instance.fields.keys()) == {
             "question",
             "context",
-            "label_mask",
-            "label",
+            "answer_as_passage_indices",
+            "context_entity_mask",
             "metadata",
         }
 
         assert [t.text for t in instance["question"][:3]] == ["@entity8", "'s", "@placeholder"]
         assert [t.text for t in instance["context"][:3]] == ["@entity0", "safaris", "have"]
         assert [t.text for t in instance["context"][-3:]] == ["990", "per", "night"]
-        assert_allclose(instance["label_mask"].array, numpy.ones(51))
-        assert instance["label"].label == 9
+        assert len(instance["answer_as_passage_indices"].field_list) == 1
+        answer_sequence_index = instance["answer_as_passage_indices"].field_list[0].sequence_index
+        assert answer_sequence_index == 203
+        assert instance["answer_as_passage_indices"].field_list[0].sequence_field[
+            answer_sequence_index].text == "@entity9"
+        for index, value in enumerate(instance["context_entity_mask"].array):
+            if value == 1:
+                assert instance["context"][index].text.startswith("@entity")
+            else:
+                assert not instance["context"][index].text.startswith("@entity")
         assert set(instance["metadata"].metadata.keys()) == {
             "original_context",
             "question_tokens",
@@ -51,17 +59,24 @@ class TestCnnDailymailReader:
         assert set(instance.fields.keys()) == {
             "question",
             "context",
-            "label_mask",
-            "label",
+            "answer_as_passage_indices",
             "metadata",
+            "context_entity_mask"
         }
 
         assert [t.text for t in instance["question"][:3]] == ["@entity48", "'s", "@placeholder"]
         assert [t.text for t in instance["context"][:3]] == ["@entity1", "safaris", "have"]
         assert [t.text for t in instance["context"][-3:]] == ["990", "per", "night"]
-        assert len(instance["label_mask"].array) == 283
-        assert sum(instance["label_mask"].array) == 51
-        assert instance["label"].label == 49
+        assert len(instance["answer_as_passage_indices"].field_list) == 1
+        answer_sequence_index = instance["answer_as_passage_indices"].field_list[0].sequence_index
+        assert answer_sequence_index == 203
+        assert instance["answer_as_passage_indices"].field_list[0].sequence_field[
+            answer_sequence_index].text == "@entity49"
+        for index, value in enumerate(instance["context_entity_mask"].array):
+            if value == 1:
+                assert instance["context"][index].text.startswith("@entity")
+            else:
+                assert not instance["context"][index].text.startswith("@entity")
         assert set(instance["metadata"].metadata.keys()) == {
             "original_context",
             "question_tokens",

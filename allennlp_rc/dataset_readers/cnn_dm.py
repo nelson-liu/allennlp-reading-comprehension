@@ -10,9 +10,10 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import (
     Field,
     ArrayField,
+    ListField,
+    IndexField,
     TextField,
     MetadataField,
-    LabelField
 )
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
@@ -90,26 +91,18 @@ class CnnDmReader(DatasetReader):
         if self._relabel_entities:
             # Relabel entities to start from @entity0 and count up for each unique entity.
             new_entity_ids = {}
-            # Important that context_tokens are processed first, so the mask over possible
-            # answer entities in the document has contiguous 1's.
             for word in context_tokens + question_tokens:
                 if word.text.startswith('@entity') and word.text not in new_entity_ids:
                     new_entity_ids[word.text] = '@entity' + str(len(new_entity_ids))
             question_tokens = [Token(new_entity_ids.get(token.text, token.text)) for token in question_tokens]
             context_tokens = [Token(new_entity_ids.get(token.text, token.text)) for token in context_tokens]
-            num_context_entities = len(set(token.text for token in context_tokens if token.text.startswith("@entity")))
-            label_mask = numpy.ones(num_context_entities)
             if answer_text:
                 answer_text = new_entity_ids[answer_text]
-        else:
-            # Get indices of the labels
-            context_entity_indices = list(set(int(token.text.lstrip("@entity")) for token in
-                                              context_tokens if token.text.startswith("@entity")))
-            label_mask = numpy.zeros(max(context_entity_indices) + 1)
-            label_mask[context_entity_indices] = 1
-        fields["context"] = TextField(context_tokens, self._token_indexers)
+        context_field = TextField(context_tokens, self._token_indexers)
+        fields["context"] = context_field
         fields["question"] = TextField(question_tokens, self._token_indexers)
-        fields["label_mask"] = ArrayField(label_mask)
+        fields["context_entity_mask"] = ArrayField(numpy.array([1 if tok.text.startswith("@entity") else 0 for
+                                                                tok in context_tokens]))
         metadata = {
             "original_context": context_text,
             "question_tokens": [token.text for token in question_tokens],
@@ -118,8 +111,11 @@ class CnnDmReader(DatasetReader):
         if self._relabel_entities:
             metadata["new_entity_ids"] = new_entity_ids
         if answer_text:
-            answer_entity_index = int(answer_text.lstrip("@entity"))
-            fields["label"] = LabelField(int(answer_entity_index), skip_indexing=True)
+            # For each occurrence of answer_text in the context, make an IndexField
+            context_label_index_fields = [IndexField(token_index, context_field) for
+                                          token_index, token in enumerate(context_tokens) if
+                                          token.text == answer_text]
+            fields["answer_as_passage_indices"] = ListField(context_label_index_fields)
             metadata["answer_text"] = answer_text
         fields["metadata"] = MetadataField(metadata)
         return Instance(fields)
